@@ -42,6 +42,43 @@
     color: var(--success-color);
   }
 
+  & .form-input-hint.recommended-tags {
+    display: none;
+
+    & .recommended-tag {
+      appearance: none;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      color: var(--alternative-color);
+      cursor: pointer;
+      display: inline-block;
+      font-size: var(--font-size-sm);
+      height: auto;
+      line-height: inherit;
+      margin-right: var(--unit-2);
+      padding: 0;
+
+      &::before {
+        content: "#";
+      }
+
+      &:focus-visible {
+        outline: var(--focus-outline);
+        outline-offset: var(--focus-outline-offset);
+      }
+
+      &:hover {
+        color: var(--alternative-color);
+      }
+
+      &[disabled] {
+        opacity: 0.4;
+        pointer-events: none;
+      }
+    }
+  }
+
   & details.notes textarea {
     box-sizing: border-box;
   }

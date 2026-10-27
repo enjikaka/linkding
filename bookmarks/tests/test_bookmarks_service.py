@@ -4,7 +4,7 @@ from unittest.mock import patch
 from django.test import TestCase
 from django.utils import timezone
 
-from bookmarks.models import Bookmark, Tag
+from bookmarks.models import Bookmark, Tag, UserProfile
 from bookmarks.services import tasks, website_loader
 from bookmarks.services.bookmarks import (
     archive_bookmark,
@@ -227,6 +227,20 @@ class BookmarkServiceTestCase(TestCase, BookmarkFactoryMixin):
 
         self.assertCountEqual(bookmark.tags.all(), [tag1, tag2])
 
+    def test_create_should_not_add_tags_from_auto_tagging_in_jev_mode(self):
+        tag1 = self.setup_tag()
+        tag2 = self.setup_tag()
+        profile = self.get_or_create_test_user().profile
+        profile.auto_tagging_rules = f"example.com {tag2.name}"
+        profile.auto_tagging_mode = UserProfile.AUTO_TAGGING_MODE_JEV
+        profile.save()
+
+        bookmark_data = Bookmark(url="https://example.com")
+        bookmark = create_bookmark(bookmark_data, tag1.name, self.user)
+
+        # In Jev mode, domain rules are not applied automatically
+        self.assertCountEqual(bookmark.tags.all(), [tag1])
+
     def test_create_should_set_default_dates(self):
         with patch("bookmarks.services.bookmarks.timezone.now") as mock_now:
             fixed_time = timezone.make_aware(datetime.datetime(2024, 1, 15, 12, 0, 0))
@@ -342,6 +356,20 @@ class BookmarkServiceTestCase(TestCase, BookmarkFactoryMixin):
         update_bookmark(bookmark, tag1.name, self.user)
 
         self.assertCountEqual(bookmark.tags.all(), [tag1, tag2])
+
+    def test_update_should_not_add_tags_from_auto_tagging_in_jev_mode(self):
+        tag1 = self.setup_tag()
+        tag2 = self.setup_tag()
+        profile = self.get_or_create_test_user().profile
+        profile.auto_tagging_rules = f"example.com {tag2.name}"
+        profile.auto_tagging_mode = UserProfile.AUTO_TAGGING_MODE_JEV
+        profile.save()
+        bookmark = self.setup_bookmark(url="https://example.com")
+
+        update_bookmark(bookmark, tag1.name, self.user)
+
+        # In Jev mode, domain rules are not applied automatically
+        self.assertCountEqual(bookmark.tags.all(), [tag1])
 
     def test_archive_bookmark(self):
         bookmark = Bookmark(

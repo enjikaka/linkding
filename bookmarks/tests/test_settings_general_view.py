@@ -8,7 +8,7 @@ from django.urls import reverse
 from requests import RequestException
 
 from bookmarks.models import GlobalSettings, UserProfile
-from bookmarks.services import tasks
+from bookmarks.services import jev, tasks
 from bookmarks.tests.helpers import BookmarkFactoryMixin
 from bookmarks.views.settings import app_version, get_version_info
 
@@ -44,6 +44,8 @@ class SettingsGeneralViewTestCase(TestCase, BookmarkFactoryMixin):
             "permanent_notes": False,
             "custom_css": "",
             "auto_tagging_rules": "",
+            "auto_tagging_mode": UserProfile.AUTO_TAGGING_MODE_DOMAIN,
+            "openrouter_api_key": "",
             "items_per_page": "30",
             "sticky_pagination": False,
             "collapse_side_panel": False,
@@ -118,6 +120,8 @@ class SettingsGeneralViewTestCase(TestCase, BookmarkFactoryMixin):
             "default_mark_shared": True,
             "custom_css": "body { background-color: #000; }",
             "auto_tagging_rules": "example.com tag",
+            "auto_tagging_mode": UserProfile.AUTO_TAGGING_MODE_DOMAIN,
+            "openrouter_api_key": "",
             "items_per_page": "10",
             "sticky_pagination": True,
             "collapse_side_panel": True,
@@ -210,6 +214,59 @@ class SettingsGeneralViewTestCase(TestCase, BookmarkFactoryMixin):
         self.assertEqual(self.user.profile.legacy_search, form_data["legacy_search"])
 
         self.assertSuccessMessage(html, "Profile updated")
+
+    def test_update_profile_should_update_auto_tagging_mode(self):
+        form_data = self.create_profile_form_data(
+            {
+                "auto_tagging_mode": UserProfile.AUTO_TAGGING_MODE_JEV,
+            }
+        )
+
+        response = self.client.post(
+            reverse("linkding:settings.update"), form_data, follow=True
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user.profile.refresh_from_db()
+        self.assertEqual(
+            self.user.profile.auto_tagging_mode, UserProfile.AUTO_TAGGING_MODE_JEV
+        )
+
+    def test_update_profile_should_store_api_key_encrypted(self):
+        form_data = self.create_profile_form_data(
+            {
+                "openrouter_api_key": "sk-or-v1-test-key",
+            }
+        )
+
+        response = self.client.post(
+            reverse("linkding:settings.update"), form_data, follow=True
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user.profile.refresh_from_db()
+        self.assertNotEqual(self.user.profile.openrouter_api_key, "sk-or-v1-test-key")
+        self.assertEqual(
+            jev.decrypt_api_key(self.user.profile.openrouter_api_key),
+            "sk-or-v1-test-key",
+        )
+
+    def test_update_profile_should_keep_existing_api_key_when_field_is_empty(self):
+        self.user.profile.openrouter_api_key = jev.encrypt_api_key("sk-or-v1-old-key")
+        self.user.profile.save()
+
+        form_data = self.create_profile_form_data()
+
+        response = self.client.post(
+            reverse("linkding:settings.update"), form_data, follow=True
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user.profile.refresh_from_db()
+        self.assertEqual(
+            jev.decrypt_api_key(self.user.profile.openrouter_api_key),
+            "sk-or-v1-old-key",
+        )
 
     def test_update_profile_with_invalid_form_returns_422(self):
         form_data = self.create_profile_form_data({"items_per_page": "-1"})

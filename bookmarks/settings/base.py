@@ -307,6 +307,15 @@ LD_ENABLE_REFRESH_FAVICONS = os.getenv("LD_ENABLE_REFRESH_FAVICONS", True) in (
     "1",
 )
 
+# Jev auto tagging settings
+LD_ENABLE_AUTO_TAGGING_JEV = os.getenv("LD_ENABLE_AUTO_TAGGING_JEV", False) in (
+    True,
+    "True",
+    "true",
+    "1",
+)
+LD_OPENROUTER_MODEL = os.getenv("LD_OPENROUTER_MODEL", "typesafe/jev-1.13")
+
 # Previews settings
 LD_PREVIEW_FOLDER = os.path.join(BASE_DIR, "data", "previews")
 LD_PREVIEW_MAX_SIZE = int(os.getenv("LD_PREVIEW_MAX_SIZE", 5242880))

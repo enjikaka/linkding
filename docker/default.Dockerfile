@@ -114,3 +114,5 @@ RUN mkdir -p chromium-profile &&  \
     chown -R www-data:www-data uBOLite.chromium.mv3
 # enable snapshot support
 ENV LD_ENABLE_SNAPSHOTS=True
+# enable Jev auto tagging (opt-in per user, requires OpenRouter API key)
+ENV LD_ENABLE_AUTO_TAGGING_JEV=True

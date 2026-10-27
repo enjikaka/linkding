@@ -392,6 +392,12 @@ class UserProfile(models.Model):
         (TAG_GROUPING_ALPHABETICAL, "Alphabetical"),
         (TAG_GROUPING_DISABLED, "Disabled"),
     ]
+    AUTO_TAGGING_MODE_DOMAIN = "domain"
+    AUTO_TAGGING_MODE_JEV = "jev"
+    AUTO_TAGGING_MODE_CHOICES = [
+        (AUTO_TAGGING_MODE_DOMAIN, "Domain-based"),
+        (AUTO_TAGGING_MODE_JEV, "AI-based (Jev)"),
+    ]
     user = models.OneToOneField(User, related_name="profile", on_delete=models.CASCADE)
     theme = models.CharField(
         max_length=10, choices=THEME_CHOICES, blank=False, default=THEME_AUTO
@@ -449,6 +455,13 @@ class UserProfile(models.Model):
     custom_css = models.TextField(blank=True, null=False)
     custom_css_hash = models.CharField(blank=True, null=False, max_length=32)
     auto_tagging_rules = models.TextField(blank=True, null=False)
+    auto_tagging_mode = models.CharField(
+        max_length=10,
+        choices=AUTO_TAGGING_MODE_CHOICES,
+        blank=False,
+        default=AUTO_TAGGING_MODE_DOMAIN,
+    )
+    openrouter_api_key = models.TextField(blank=True, null=False)
     search_preferences = models.JSONField(default=dict, null=False)
     enable_automatic_html_snapshots = models.BooleanField(default=True, null=False)
     default_mark_unread = models.BooleanField(default=False, null=False)

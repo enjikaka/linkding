@@ -56,3 +56,23 @@ When adding a bookmark for a URL like `https://www.reddit.com/r/Music/comments/.
 3. Match the path against the pattern. The path `/r/Music` also matches the nested path `/r/Music/comments/...`.
 4. Match the query string. Since the rule does not specify a query string, it matches all query strings.
 5. The tags `music` and `reddit` will be added to the bookmark.
+
+## AI-based auto tagging (Jev)
+
+Alternatively, auto tagging can be based on AI classification using the [Jev model](https://openrouter.ai/typesafe/jev-1.13) on OpenRouter. Instead of applying tags based on URL rules, the model classifies the content of a bookmark and suggests the most relevant tags from your existing tags.
+
+### Setup
+
+1. Configure an OpenRouter API key on the [integrations page](/settings/integrations).
+2. In the general settings, switch the auto tagging mode from *Domain-based* to *AI-based (Jev)*.
+3. When creating a new bookmark, linkding now asks the Jev model to classify the bookmark and shows recommended tags below the tags input, sorted by their match score. Clicking a recommended tag adds it to the bookmark.
+
+Note that tags are only **recommended** — they are never applied automatically. Domain-based rules are ignored while the Jev mode is active.
+
+### Privacy
+
+AI-based auto tagging sends the URL, title and description of bookmarks to OpenRouter. The feature is opt-in: it must
+be enabled instance-wide with the [`LD_ENABLE_AUTO_TAGGING_JEV`](/options/#ld_enable_auto_tagging_jev) option
+(the official Docker images enable this option by default), and each user must then configure their own OpenRouter
+API key and select the AI-based mode. The model can be changed with
+[`LD_OPENROUTER_MODEL`](/options/#ld_openrouter_model).

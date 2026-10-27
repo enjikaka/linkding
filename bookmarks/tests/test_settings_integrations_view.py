@@ -1,7 +1,8 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from bookmarks.models import ApiToken, FeedToken
+from bookmarks.services import jev
 from bookmarks.tests.helpers import BookmarkFactoryMixin, HtmlTestMixin
 
 
@@ -147,4 +148,96 @@ class SettingsIntegrationsViewTestCase(TestCase, BookmarkFactoryMixin, HtmlTestM
         self.assertInHTML(
             '<a target="_blank" href="/feeds/shared">Public shared bookmarks</a>',
             html,
+        )
+
+
+class SettingsIntegrationsOpenRouterApiKeyViewTestCase(TestCase, BookmarkFactoryMixin):
+    def setUp(self) -> None:
+        user = self.get_or_create_test_user()
+        self.client.force_login(user)
+
+    def test_should_check_authentication(self):
+        self.client.logout()
+        response = self.client.post(
+            reverse("linkding:settings.integrations.update_api_key"),
+            {"save_openrouter_api_key": "", "openrouter_api_key": "sk-or-v1-test"},
+            follow=True,
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("login")
+            + "?next="
+            + reverse("linkding:settings.integrations.update_api_key"),
+        )
+
+    def test_save_api_key(self):
+        response = self.client.post(
+            reverse("linkding:settings.integrations.update_api_key"),
+            {
+                "save_openrouter_api_key": "",
+                "openrouter_api_key": " sk-or-v1-test-key ",
+            },
+            follow=True,
+        )
+
+        self.assertRedirects(response, reverse("linkding:settings.integrations"))
+        self.user.profile.refresh_from_db()
+        self.assertEqual(
+            jev.decrypt_api_key(self.user.profile.openrouter_api_key),
+            "sk-or-v1-test-key",
+        )
+        self.assertContains(response, "OpenRouter API key updated")
+
+    def test_save_api_key_with_empty_value_shows_error(self):
+        response = self.client.post(
+            reverse("linkding:settings.integrations.update_api_key"),
+            {"save_openrouter_api_key": "", "openrouter_api_key": ""},
+            follow=True,
+        )
+
+        self.user.profile.refresh_from_db()
+        self.assertEqual(self.user.profile.openrouter_api_key, "")
+        self.assertContains(response, "Please enter an OpenRouter API key")
+
+    def test_remove_api_key(self):
+        self.user.profile.openrouter_api_key = jev.encrypt_api_key("sk-or-v1-test-key")
+        self.user.profile.save()
+
+        response = self.client.post(
+            reverse("linkding:settings.integrations.update_api_key"),
+            {"remove_openrouter_api_key": "1"},
+            follow=True,
+        )
+
+        self.user.profile.refresh_from_db()
+        self.assertEqual(self.user.profile.openrouter_api_key, "")
+        self.assertContains(response, "OpenRouter API key removed")
+
+    def test_should_render_api_key_section(self):
+        self.user.profile.openrouter_api_key = jev.encrypt_api_key("sk-or-v1-test-key")
+        self.user.profile.save()
+
+        response = self.client.get(reverse("linkding:settings.integrations"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "AI Auto Tagging (Jev)")
+        self.assertContains(response, "…-key")
+        self.assertContains(response, "remove_openrouter_api_key")
+
+    def test_should_show_warning_when_jev_auto_tagging_disabled(self):
+        # Default settings disable the feature instance-wide
+        response = self.client.get(reverse("linkding:settings.integrations"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "This feature is disabled on this instance.")
+        self.assertContains(response, "LD_ENABLE_AUTO_TAGGING_JEV")
+
+    @override_settings(LD_ENABLE_AUTO_TAGGING_JEV=True)
+    def test_should_not_show_warning_when_jev_auto_tagging_enabled(self):
+        response = self.client.get(reverse("linkding:settings.integrations"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(
+            response, "This feature is disabled on this instance."
         )

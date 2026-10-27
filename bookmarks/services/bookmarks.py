@@ -2,7 +2,7 @@ import logging
 
 from django.utils import timezone
 
-from bookmarks.models import Bookmark, User, parse_tag_string
+from bookmarks.models import Bookmark, User, UserProfile, parse_tag_string
 from bookmarks.services import auto_tagging, tasks, website_loader
 from bookmarks.services.tags import get_or_create_tags
 
@@ -226,7 +226,13 @@ def _merge_bookmark_data(from_bookmark: Bookmark, to_bookmark: Bookmark):
 def _update_bookmark_tags(bookmark: Bookmark, tag_string: str, user: User):
     tag_names = parse_tag_string(tag_string)
 
-    if user.profile.auto_tagging_rules:
+    # In domain mode, automatically add tags based on domain rules.
+    # In Jev mode, tags are only suggested to the user but never applied
+    # automatically.
+    if (
+        user.profile.auto_tagging_mode == UserProfile.AUTO_TAGGING_MODE_DOMAIN
+        and user.profile.auto_tagging_rules
+    ):
         try:
             auto_tag_names = auto_tagging.get_tags(
                 user.profile.auto_tagging_rules, bookmark.url

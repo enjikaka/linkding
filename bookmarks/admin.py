@@ -295,7 +295,7 @@ class AdminUserProfileInline(admin.StackedInline):
     can_delete = False
     verbose_name_plural = "Profile"
     fk_name = "user"
-    readonly_fields = ("search_preferences",)
+    readonly_fields = ("search_preferences", "openrouter_api_key")
 
 
 class AdminCustomUser(UserAdmin):

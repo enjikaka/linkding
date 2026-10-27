@@ -183,6 +183,65 @@
       })();
     </script>
     </turbo-frame>
+    <section aria-labelledby="jev-auto-tagging-heading">
+      <h2 id="jev-auto-tagging-heading">AI Auto Tagging (Jev)</h2>
+      {% if not ld_enable_auto_tagging_jev %}
+        <div class="toast toast-error mb-2">
+          This feature is disabled on this instance.
+          The <code>LD_ENABLE_AUTO_TAGGING_JEV</code> option must be set to <code>True</code> to enable it,
+          see the <a href="https://linkding.link/options/#ld_enable_auto_tagging_jev" target="_blank" rel="noopener">options documentation</a>.
+        </div>
+      {% endif %}
+      {% if success_message %}<div class="toast toast-success mb-2">{{ success_message }}</div>{% endif %}
+      {% if error_message %}<div class="toast toast-error mb-2">{{ error_message }}</div>{% endif %}
+      <p>
+        The OpenRouter API key is used by the <a href="https://openrouter.ai/typesafe/jev-1.13"
+    target="_blank"
+    rel="noopener">Jev model</a>
+        to classify bookmarks and recommend tags when creating a new bookmark. This requires the
+        <a href="{% url 'linkding:settings.general' %}">AI-based (Jev) auto tagging mode</a> to be
+        enabled in the general settings.
+        Note that AI-based auto tagging sends the URL, title and description of your bookmarks to OpenRouter.
+      </p>
+      <form action="{% url 'linkding:settings.integrations.update_api_key' %}"
+            method="post"
+            novalidate
+            data-turbo="false">
+        {% csrf_token %}
+        <div class="form-group">
+          <label class="form-label" for="openrouter_api_key">OpenRouter API key</label>
+          <input class="form-input width-50 width-sm-100"
+                 type="password"
+                 id="openrouter_api_key"
+                 name="openrouter_api_key"
+                 autocomplete="new-password"
+                 placeholder="{% if openrouter_api_key_set %}Enter a new key to replace the existing one{% else %}sk-or-…{% endif %}">
+          <div class="form-input-hint">
+            {% if openrouter_api_key_set %}
+              A key is configured (ending in …{{ openrouter_api_key_last4 }}). Leave the field empty to
+              keep the existing key, or enter a new key to replace it.
+            {% else %}
+              No key configured yet. Get one at <a href="https://openrouter.ai/keys"
+    target="_blank"
+    rel="noopener">openrouter.ai</a>.
+            {% endif %}
+          </div>
+        </div>
+        <div class="form-group d-flex justify-between">
+          <input type="submit"
+                 name="save_openrouter_api_key"
+                 value="Save key"
+                 class="btn btn-primary">
+          {% if openrouter_api_key_set %}
+            <button data-confirm
+                    type="submit"
+                    name="remove_openrouter_api_key"
+                    value="1"
+                    class="btn">Remove key</button>
+          {% endif %}
+        </div>
+      </form>
+    </section>
     <section aria-labelledby="rss-feeds-heading">
       <h2 id="rss-feeds-heading">RSS Feeds</h2>
       <p>The following URLs provide RSS feeds for your bookmarks:</p>

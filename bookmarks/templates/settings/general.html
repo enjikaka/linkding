@@ -137,17 +137,48 @@
             <summary>
               <span class="form-label d-inline-block">Auto Tagging</span>
             </summary>
-            <label for="{{ form.auto_tagging_rules.id_for_label }}"
-                   class="text-assistive">Auto Tagging</label>
-            <div>{% formfield form.auto_tagging_rules has_help=True class="monospace" rows="6" %}</div>
-          </details>
-          {% formhelp form.auto_tagging_rules %}
-            Automatically adds tags to bookmarks based on predefined rules.
-            Each line is a single rule that maps a URL to one or more tags. For example:
-            <pre>youtube.com video
+            <div class="form-group">
+              {% formlabel form.auto_tagging_mode "Auto tagging mode" %}
+              {% formfield form.auto_tagging_mode has_help=True class="width-25 width-sm-100" %}
+              {% formhelp form.auto_tagging_mode %}
+                Domain-based automatically adds tags to bookmarks based on predefined URL rules.
+                AI-based (Jev) uses the Jev model on OpenRouter to classify new bookmarks and shows
+                recommended tags when creating a bookmark. This mode requires an OpenRouter API key,
+                which can be configured on the
+                <a href="{% url 'linkding:settings.integrations' %}">integrations page</a>.
+                Note that AI-based auto tagging sends the URL, title and description of your bookmarks
+                to OpenRouter.
+              {% endformhelp %}
+            </div>
+            <div id="auto-tagging-rules"
+                 {% if form.auto_tagging_mode.value == 'jev' %}class="d-hide"{% endif %}>
+              <label for="{{ form.auto_tagging_rules.id_for_label }}"
+                     class="text-assistive">Auto Tagging Rules</label>
+              <div>{% formfield form.auto_tagging_rules has_help=True class="monospace" rows="6" %}</div>
+              {% formhelp form.auto_tagging_rules %}
+                Automatically adds tags to bookmarks based on predefined rules.
+                Each line is a single rule that maps a URL to one or more tags. For example:
+                <pre>youtube.com video
 reddit.com/r/Music music reddit</pre>
-          {% endformhelp %}
+              {% endformhelp %}
+            </div>
+          </details>
         </div>
+        <script>
+          (function init() {
+            const modeSelect = document.getElementById('{{ form.auto_tagging_mode.id_for_label }}');
+            const rulesDiv = document.getElementById('auto-tagging-rules');
+            if (!modeSelect || !rulesDiv) {
+              return;
+            }
+
+            function toggleRules() {
+              rulesDiv.style['display'] = modeSelect.value === 'jev' ? 'none' : '';
+            }
+            modeSelect.addEventListener('change', toggleRules);
+            toggleRules();
+          })();
+        </script>
         <div class="form-group">
           {% formfield form.enable_favicons label="Enable Favicons" has_help=True %}
           {% formhelp form.enable_favicons %}

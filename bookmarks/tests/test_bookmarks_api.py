@@ -13,7 +13,7 @@ from rest_framework.response import Response
 
 import bookmarks.services.bookmarks
 from bookmarks.models import Bookmark, BookmarkSearch, UserProfile
-from bookmarks.services import website_loader
+from bookmarks.services import jev, website_loader
 from bookmarks.services.wayback import generate_fallback_webarchive_url
 from bookmarks.services.website_loader import WebsiteMetadata
 from bookmarks.tests.helpers import BookmarkFactoryMixin, LinkdingApiTestCase
@@ -1122,6 +1122,179 @@ class BookmarksApiTestCase(LinkdingApiTestCase, BookmarkFactoryMixin):
         auto_tags = response.data["auto_tags"]
 
         self.assertCountEqual(auto_tags, ["tag1", "tag2"])
+
+    def test_check_returns_no_recommended_tags_in_domain_mode(self):
+        self.authenticate()
+
+        profile = self.get_or_create_test_user().profile
+        profile.auto_tagging_mode = UserProfile.AUTO_TAGGING_MODE_DOMAIN
+        profile.openrouter_api_key = jev.encrypt_api_key("sk-or-v1-test-key")
+        profile.save()
+
+        url = reverse("linkding:bookmark-check")
+        check_url = urllib.parse.quote_plus("https://example.com")
+        with patch.object(
+            website_loader, "load_website_metadata"
+        ) as mock_load_website_metadata:
+            mock_load_website_metadata.return_value = WebsiteMetadata(
+                "https://example.com",
+                "Example title",
+                "Example description",
+                "https://example.com/preview.png",
+            )
+            response = self.get(
+                f"{url}?url={check_url}", expected_status_code=status.HTTP_200_OK
+            )
+
+        self.assertEqual(response.data["recommended_tags"], [])
+
+    @override_settings(LD_ENABLE_AUTO_TAGGING_JEV=True)
+    def test_check_returns_recommended_tags_in_jev_mode(self):
+        self.authenticate()
+
+        profile = self.get_or_create_test_user().profile
+        profile.auto_tagging_mode = UserProfile.AUTO_TAGGING_MODE_JEV
+        profile.openrouter_api_key = jev.encrypt_api_key("sk-or-v1-test-key")
+        profile.save()
+        tag = self.setup_tag(name="kaffe")
+
+        url = reverse("linkding:bookmark-check")
+        check_url = urllib.parse.quote_plus("https://example.com")
+        with (
+            patch.object(
+                website_loader, "load_website_metadata"
+            ) as mock_load_website_metadata,
+            patch(
+                "bookmarks.api.routes.jev.get_recommendations_cached"
+            ) as mock_get_recommendations,
+        ):
+            mock_load_website_metadata.return_value = WebsiteMetadata(
+                "https://example.com",
+                "Example title",
+                "Example description",
+                "https://example.com/preview.png",
+            )
+            mock_get_recommendations.return_value = [
+                {"name": "kaffe", "score": 0.95},
+                {"name": tag.name, "score": 0.6},
+            ]
+            response = self.get(
+                f"{url}?url={check_url}", expected_status_code=status.HTTP_200_OK
+            )
+
+        self.assertEqual(
+            response.data["recommended_tags"],
+            [
+                {"name": "kaffe", "score": 0.95},
+                {"name": tag.name, "score": 0.6},
+            ],
+        )
+        # Domain-based auto tags are not active in Jev mode
+        self.assertEqual(response.data["auto_tags"], [])
+        # The service should be called with the user's tag names
+        mock_get_recommendations.assert_called_once()
+        call_kwargs = mock_get_recommendations.call_args.kwargs
+        self.assertEqual(call_kwargs["tag_names"], [tag.name])
+        self.assertEqual(call_kwargs["title"], "Example title")
+        self.assertEqual(call_kwargs["description"], "Example description")
+
+    @override_settings(LD_ENABLE_AUTO_TAGGING_JEV=True)
+    def test_check_does_not_call_jev_service_without_api_key(self):
+        self.authenticate()
+
+        profile = self.get_or_create_test_user().profile
+        profile.auto_tagging_mode = UserProfile.AUTO_TAGGING_MODE_JEV
+        profile.save()
+
+        url = reverse("linkding:bookmark-check")
+        check_url = urllib.parse.quote_plus("https://example.com")
+        with (
+            patch.object(
+                website_loader, "load_website_metadata"
+            ) as mock_load_website_metadata,
+            patch(
+                "bookmarks.api.routes.jev.get_recommendations_cached"
+            ) as mock_get_recommendations,
+        ):
+            mock_load_website_metadata.return_value = WebsiteMetadata(
+                "https://example.com",
+                "Example title",
+                "Example description",
+                "https://example.com/preview.png",
+            )
+            response = self.get(
+                f"{url}?url={check_url}", expected_status_code=status.HTTP_200_OK
+            )
+
+        self.assertEqual(response.data["recommended_tags"], [])
+        mock_get_recommendations.assert_not_called()
+
+    @override_settings(LD_ENABLE_AUTO_TAGGING_JEV=True)
+    def test_check_returns_empty_auto_tags_in_jev_mode_with_rules(self):
+        self.authenticate()
+
+        profile = self.get_or_create_test_user().profile
+        profile.auto_tagging_mode = UserProfile.AUTO_TAGGING_MODE_JEV
+        profile.auto_tagging_rules = "example.com tag1"
+        profile.openrouter_api_key = jev.encrypt_api_key("sk-or-v1-test-key")
+        profile.save()
+
+        url = reverse("linkding:bookmark-check")
+        check_url = urllib.parse.quote_plus("https://example.com")
+        with (
+            patch.object(
+                website_loader, "load_website_metadata"
+            ) as mock_load_website_metadata,
+            patch(
+                "bookmarks.api.routes.jev.get_recommendations_cached"
+            ) as mock_get_recommendations,
+        ):
+            mock_load_website_metadata.return_value = WebsiteMetadata(
+                "https://example.com",
+                "Example title",
+                "Example description",
+                "https://example.com/preview.png",
+            )
+            mock_get_recommendations.return_value = []
+            response = self.get(
+                f"{url}?url={check_url}", expected_status_code=status.HTTP_200_OK
+            )
+
+        self.assertEqual(response.data["auto_tags"], [])
+        mock_get_recommendations.assert_called_once()
+
+    def test_check_does_not_call_jev_service_when_feature_disabled(self):
+        self.authenticate()
+
+        profile = self.get_or_create_test_user().profile
+        profile.auto_tagging_mode = UserProfile.AUTO_TAGGING_MODE_JEV
+        profile.openrouter_api_key = jev.encrypt_api_key("sk-or-v1-test-key")
+        profile.save()
+
+        url = reverse("linkding:bookmark-check")
+        check_url = urllib.parse.quote_plus("https://example.com")
+        with (
+            patch.object(
+                website_loader, "load_website_metadata"
+            ) as mock_load_website_metadata,
+            patch(
+                "bookmarks.api.routes.jev.get_recommendations_cached"
+            ) as mock_get_recommendations,
+        ):
+            mock_load_website_metadata.return_value = WebsiteMetadata(
+                "https://example.com",
+                "Example title",
+                "Example description",
+                "https://example.com/preview.png",
+            )
+            response = self.get(
+                f"{url}?url={check_url}", expected_status_code=status.HTTP_200_OK
+            )
+
+        # With the feature disabled instance-wide, no recommendations are
+        # returned and the Jev service is never called
+        self.assertEqual(response.data["recommended_tags"], [])
+        mock_get_recommendations.assert_not_called()
 
     def test_check_ignore_cache(self):
         self.authenticate()

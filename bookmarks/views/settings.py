@@ -20,7 +20,7 @@ from bookmarks.models import (
     FeedToken,
     GlobalSettings,
 )
-from bookmarks.services import exporter, importer, tasks
+from bookmarks.services import exporter, importer, jev, tasks
 from bookmarks.type_defs import HttpRequest
 from bookmarks.utils import app_version
 from bookmarks.views import access
@@ -103,8 +103,19 @@ def update_profile(request: HttpRequest):
     profile = user.profile
     favicons_were_enabled = profile.enable_favicons
     previews_were_enabled = profile.enable_preview_images
+    # Snapshot the stored API key before form validation overwrites the
+    # in-memory profile with the submitted (empty) value
+    stored_api_key = profile.openrouter_api_key
     form = UserProfileForm(request.POST, instance=profile)
     if form.is_valid():
+        # The API key uses a password input that never echoes the stored value,
+        # so an empty submission means "keep the existing key", while a
+        # non-empty submission replaces it. Keys are encrypted at rest.
+        submitted_key = form.cleaned_data.get("openrouter_api_key", "").strip()
+        if submitted_key:
+            form.instance.openrouter_api_key = jev.encrypt_api_key(submitted_key)
+        else:
+            form.instance.openrouter_api_key = stored_api_key
         form.save()
         messages.success(request, "Profile updated", "settings_success_message")
         # Load missing favicons if the feature was just enabled
@@ -174,8 +185,23 @@ def integrations(request):
     api_success_message = _find_message_with_tag(
         messages.get_messages(request), "api_success_message"
     )
+    success_message = _find_message_with_tag(
+        messages.get_messages(request), "settings_success_message"
+    )
+    error_message = _find_message_with_tag(
+        messages.get_messages(request), "settings_error_message"
+    )
 
     feed_token = FeedToken.objects.get_or_create(user=request.user)[0]
+
+    openrouter_api_key_set = False
+    openrouter_api_key_last4 = ""
+    stored_api_key = request.user.profile.openrouter_api_key
+    if stored_api_key:
+        api_key = jev.decrypt_api_key(stored_api_key)
+        if api_key:
+            openrouter_api_key_set = True
+            openrouter_api_key_last4 = api_key[-4:]
 
     all_feed_url = reverse("linkding:feeds.all", args=[feed_token.key])
     unread_feed_url = reverse("linkding:feeds.unread", args=[feed_token.key])
@@ -191,12 +217,49 @@ def integrations(request):
             "api_token_key": api_token_key,
             "api_token_name": api_token_name,
             "api_success_message": api_success_message,
+            "success_message": success_message,
+            "error_message": error_message,
             "all_feed_url": all_feed_url,
             "unread_feed_url": unread_feed_url,
             "shared_feed_url": shared_feed_url,
             "public_shared_feed_url": public_shared_feed_url,
+            "openrouter_api_key_set": openrouter_api_key_set,
+            "openrouter_api_key_last4": openrouter_api_key_last4,
+            "ld_enable_auto_tagging_jev": django_settings.LD_ENABLE_AUTO_TAGGING_JEV,
         },
     )
+
+
+@login_required
+def update_openrouter_api_key(request: HttpRequest):
+    if request.method == "POST":
+        profile = request.user.profile
+        if "remove_openrouter_api_key" in request.POST:
+            profile.openrouter_api_key = ""
+            profile.save()
+            messages.success(
+                request,
+                "OpenRouter API key removed",
+                "settings_success_message",
+            )
+        elif "save_openrouter_api_key" in request.POST:
+            api_key = request.POST.get("openrouter_api_key", "").strip()
+            if api_key:
+                profile.openrouter_api_key = jev.encrypt_api_key(api_key)
+                profile.save()
+                messages.success(
+                    request,
+                    "OpenRouter API key updated",
+                    "settings_success_message",
+                )
+            else:
+                messages.error(
+                    request,
+                    "Please enter an OpenRouter API key",
+                    "settings_error_message",
+                )
+
+    return HttpResponseRedirect(reverse("linkding:settings.integrations"))
 
 
 @login_required

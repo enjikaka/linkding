@@ -371,6 +371,24 @@ See the default URL for how to insert the placeholder to the favicon provider UR
 Alternative favicon providers:
 - DuckDuckGo: `https://icons.duckduckgo.com/ip3/{domain}.ico`
 
+### `LD_ENABLE_AUTO_TAGGING_JEV`
+
+Values: `True`, `False` | Default = `False` (the official Docker images enable this option)
+
+Enables the AI-based (Jev) auto tagging mode, which uses the [Jev model](https://openrouter.ai/typesafe/jev-1.13) on
+OpenRouter to classify bookmarks and recommend tags when creating a new bookmark.
+The feature is per-user opt-in: even when this option is enabled, users must configure their own OpenRouter API key
+and switch their auto tagging mode to *AI-based (Jev)* before any bookmark data is sent to OpenRouter.
+Disabling this option prevents users from using the feature at all, which can be useful to avoid any costs on
+OpenRouter.
+
+### `LD_OPENROUTER_MODEL`
+
+Values: `String` | Default = `typesafe/jev-1.13`
+
+The OpenRouter model ID used for classifying bookmarks in AI-based (Jev) auto tagging mode.
+Typically this does not need to be changed, but it allows to pin a specific Jev model version, for example `typesafe/jev-1.14`.
+
 
 ### `LD_SINGLEFILE_TIMEOUT_SEC`
 

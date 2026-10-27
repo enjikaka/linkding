@@ -84,6 +84,11 @@ urlpatterns = [
         settings_views.delete_api_token,
         name="settings.integrations.delete_api_token",
     ),
+    path(
+        "settings/integrations/update-api-key",
+        settings_views.update_openrouter_api_key,
+        name="settings.integrations.update_api_key",
+    ),
     path("settings/import", settings_views.bookmark_import, name="settings.import"),
     path("settings/export", settings_views.bookmark_export, name="settings.export"),
     # Toasts

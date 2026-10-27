@@ -23,6 +23,10 @@
       If a tag does not exist it will be automatically created.
     {% endformhelp %}
     <div class="form-input-hint auto-tags"></div>
+    <div class="form-input-hint recommended-tags" style="display: none">
+      <span class="recommended-tags-label">Recommended tags:</span>
+      <span class="recommended-tags-list"></span>
+    </div>
   </div>
   <div class="form-group">
     <div class="d-flex justify-between align-baseline">
@@ -127,6 +131,7 @@
 
       function checkUrl() {
         if (!urlInput.value) {
+          renderRecommendedTags([]);
           return;
         }
 
@@ -170,7 +175,7 @@
             }
 
             // Preview auto tags
-            const autoTags = data.auto_tags;
+            const autoTags = data.auto_tags || [];
             const autoTagsHint = document.querySelector('.form-input-hint.auto-tags');
 
             if (autoTags.length > 0) {
@@ -180,7 +185,80 @@
             } else {
               autoTagsHint.style['display'] = 'none';
             }
+
+            // Render recommended tags from Jev classification
+            renderRecommendedTags(data.recommended_tags || []);
           });
+      }
+
+      function renderRecommendedTags(recommendedTags) {
+        const container = document.querySelector('.form-input-hint.recommended-tags');
+        if (!container) {
+          return;
+        }
+        const list = container.querySelector('.recommended-tags-list');
+        list.innerHTML = '';
+
+        if (!recommendedTags || recommendedTags.length === 0) {
+          container.style['display'] = 'none';
+          return;
+        }
+
+        // Sort by score descending (the API already returns them sorted)
+        const sortedTags = [...recommendedTags].sort((a, b) => b.score - a.score);
+
+        sortedTags.forEach(({
+          name,
+          score
+        }) => {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'recommended-tag';
+          chip.textContent = name;
+          chip.title = `Score: ${Math.round(score * 100)}%`;
+          chip.addEventListener('click', () => addRecommendedTag(name));
+          list.appendChild(chip);
+        });
+        updateRecommendedTagStates();
+
+        container.style['display'] = 'block';
+      }
+
+      function isTagInInput(tagName) {
+        const tagsInput = document.getElementById('{{ form.tag_string.id_for_label }}');
+        if (!tagsInput) {
+          return false;
+        }
+        const current = tagsInput.value.trim();
+        const existingTags = current ? current.split(/\s+/) : [];
+        return existingTags.some(tag => tag.toLowerCase() === tagName.toLowerCase());
+      }
+
+      function updateRecommendedTagStates() {
+        const container = document.querySelector('.form-input-hint.recommended-tags');
+        if (!container) {
+          return;
+        }
+        container.querySelectorAll('.recommended-tag').forEach((chip) => {
+          chip.disabled = isTagInInput(chip.textContent);
+        });
+      }
+
+      function addRecommendedTag(tagName) {
+        const tagsInput = document.getElementById('{{ form.tag_string.id_for_label }}');
+        if (!tagsInput) {
+          return;
+        }
+        const current = tagsInput.value.trim();
+        const existingTags = current ? current.split(/\s+/) : [];
+        if (existingTags.some(tag => tag.toLowerCase() === tagName.toLowerCase())) {
+          return;
+        }
+        tagsInput.value = current ? `${current} ${tagName}` : tagName;
+        tagsInput.dispatchEvent(new Event('value-changed'));
+        tagsInput.dispatchEvent(new Event('input', {
+          bubbles: true
+        }));
       }
 
       function refreshMetadata() {
@@ -213,6 +291,15 @@
       }
 
       refreshButton.addEventListener('click', refreshMetadata);
+
+      // Keep recommended tag chips in sync with the tag input: a chip is
+      // disabled while its tag is present in the input, and re-enabled again
+      // once the tag is removed from the input.
+      document.addEventListener('input', (event) => {
+        if (event.target.id === '{{ form.tag_string.id_for_label }}') {
+          updateRecommendedTagStates();
+        }
+      });
 
       // Fetch website metadata when page loads and when URL changes, unless we are editing an existing bookmark
       if (!editedBookmarkId) {

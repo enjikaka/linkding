@@ -23,8 +23,16 @@ from bookmarks.models import (
     BookmarkSearch,
     Tag,
     User,
+    UserProfile,
 )
-from bookmarks.services import assets, auto_tagging, bookmarks, bundles, website_loader
+from bookmarks.services import (
+    assets,
+    auto_tagging,
+    bookmarks,
+    bundles,
+    jev,
+    website_loader,
+)
 from bookmarks.type_defs import HttpRequest
 from bookmarks.views import access
 
@@ -115,12 +123,40 @@ class BookmarkViewSet(
         # Return tags that would be automatically applied to the bookmark
         profile = request.user.profile
         auto_tags = []
-        if profile.auto_tagging_rules:
+        recommended_tags = []
+        if (
+            profile.auto_tagging_mode == UserProfile.AUTO_TAGGING_MODE_DOMAIN
+            and profile.auto_tagging_rules
+        ):
             try:
                 auto_tags = auto_tagging.get_tags(profile.auto_tagging_rules, url)
             except Exception as e:
                 logger.error(
                     f"Failed to auto-tag bookmark. url={url}",
+                    exc_info=e,
+                )
+        elif (
+            settings.LD_ENABLE_AUTO_TAGGING_JEV
+            and profile.auto_tagging_mode == UserProfile.AUTO_TAGGING_MODE_JEV
+            and profile.openrouter_api_key
+            and metadata.title
+        ):
+            try:
+                api_key = jev.decrypt_api_key(profile.openrouter_api_key)
+                if api_key:
+                    tag_names = [
+                        tag.name for tag in queries.get_user_tags(request.user)
+                    ]
+                    recommended_tags = jev.get_recommendations_cached(
+                        url=url,
+                        title=metadata.title,
+                        description=metadata.description or "",
+                        tag_names=tag_names,
+                        api_key=api_key,
+                    )
+            except Exception as e:
+                logger.error(
+                    f"Failed to get Jev tag recommendations. url={url}",
                     exc_info=e,
                 )
 
@@ -129,6 +165,7 @@ class BookmarkViewSet(
                 "bookmark": existing_bookmark_data,
                 "metadata": metadata.to_dict(),
                 "auto_tags": auto_tags,
+                "recommended_tags": recommended_tags,
             },
             status=status.HTTP_200_OK,
         )
